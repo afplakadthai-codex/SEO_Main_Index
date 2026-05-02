@@ -832,17 +832,13 @@ $row = bv_home_attach_seller_profile_to_listing($row, $sellerProfileMap);
 
 include __DIR__ . '/includes/head.php';
 include __DIR__ . '/includes/menu.php';
-
-if (!empty($homepageJsonLd)) {
-    echo '<script type="application/ld+json">' . "
-";
-    echo $homepageJsonLd . "
-";
-    echo '</script>' . "
-";
-}
-
 ?>
+<?php if (!empty($homepageJsonLd)): ?>
+<script type="application/ld+json">
+<?= $homepageJsonLd . "
+" ?>
+</script>
+<?php endif; ?>
 
 
 

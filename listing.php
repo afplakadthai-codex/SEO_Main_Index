@@ -698,10 +698,73 @@ try {
 }
 
 $selfUrl = APP_URL . bv_listing_url_from_row($listing);
-$pageTitle = $title . ' | Bettavaro';
-$metaDescription = $description !== '' ? $description : ($shortDescription !== '' ? $shortDescription : 'Premium betta fish listing on Bettavaro.');
-$metaDescription = function_exists('mb_substr') ? mb_substr(trim(strip_tags($metaDescription)), 0, 160) : substr(trim(strip_tags($metaDescription)), 0, 160);
-$canonicalUrl = $selfUrl;
+if (!function_exists('bv_listing_seo_clean_text')) {
+    function bv_listing_seo_clean_text($value): string
+    {
+        $text = trim(preg_replace('/\s+/', ' ', strip_tags((string) $value)));
+        return $text;
+    }
+}
+if (!function_exists('bv_listing_seo_absolute_url')) {
+    function bv_listing_seo_absolute_url(?string $url, string $baseUrl): string
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return '';
+        }
+        if (preg_match('~^https?://~i', $url)) {
+            return $url;
+        }
+        if (strpos($url, '//') === 0) {
+            return 'https:' . $url;
+        }
+        return $baseUrl . '/' . ltrim($url, '/');
+    }
+}
+if (!function_exists('bv_listing_seo_first_non_empty')) {
+    function bv_listing_seo_first_non_empty(...$values): string
+    {
+        foreach ($values as $value) {
+            $text = trim((string) $value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+        return '';
+    }
+}
+if (!function_exists('bv_listing_seo_availability_url')) {
+    function bv_listing_seo_availability_url(?string $saleStatus, ?string $status): string
+    {
+        $value = strtolower(trim((string) ($saleStatus !== null && trim((string) $saleStatus) !== '' ? $saleStatus : $status)));
+        if (in_array($value, ['sold', 'out_of_stock'], true)) {
+            return 'https://schema.org/SoldOut';
+        }
+        if (in_array($value, ['reserved', 'hold', 'on_hold'], true)) {
+            return 'https://schema.org/LimitedAvailability';
+        }
+        if (in_array($value, ['preorder', 'pre-order', 'pre_order'], true)) {
+            return 'https://schema.org/PreOrder';
+        }
+        return 'https://schema.org/InStock';
+    }
+}
+$baseUrl = defined('APP_URL') ? rtrim((string) APP_URL, '/') : 'https://www.bettavaro.com';
+$listingTitleSeo = bv_listing_seo_first_non_empty($title, $listing['title'] ?? '', 'Premium Betta Fish');
+$listingTitleHasBetta = stripos($listingTitleSeo, 'betta') !== false;
+$pageTitle = $listingTitleHasBetta
+    ? ($listingTitleSeo . ' for Sale | Bettavaro')
+    : ($listingTitleSeo . ' Betta Fish for Sale | Premium Thai Betta | Bettavaro');
+$pageTitle = trim(preg_replace('/\s+/', ' ', $pageTitle));
+$productTypeSeo = bv_listing_seo_first_non_empty($strain, $species, 'premium');
+$metaDescription = 'Buy ' . $listingTitleSeo . ' on Bettavaro. Premium ' . $productTypeSeo . ' betta fish from trusted breeders, ready for collectors worldwide. View price, photos, details, and availability.';
+$metaDescription = function_exists('mb_substr') ? mb_substr(bv_listing_seo_clean_text($metaDescription), 0, 160) : substr(bv_listing_seo_clean_text($metaDescription), 0, 160);
+$canonicalUrl = $slug !== '' ? ($baseUrl . '/listing.php?slug=' . rawurlencode((string) $slug)) : ($baseUrl . '/listing.php?id=' . (int) $listingId);
+$metaRobots = 'index,follow,max-image-preview:large';
+$ogImage = bv_listing_seo_absolute_url($coverImage, $baseUrl);
+if ($ogImage === '') {
+    $ogImage = $baseUrl . '/assets/img/og-listing.jpg';
+}
 $locationLabel = trim($city . ', ' . $country, ', ');
 list($flashSuccess, $flashError) = bv_consume_flash_group();
 list($cartFlashSuccess, $cartFlashError) = bv_cart_flash_group();
@@ -818,18 +881,18 @@ $breadcrumbSchema = [
             '@type' => 'ListItem',
             'position' => 1,
             'name' => 'Home',
-            'item' => rtrim((string)APP_URL, '/') . '/',
+			'item' => $baseUrl . '/',
         ],
         [
             '@type' => 'ListItem',
             'position' => 2,
-            'name' => 'Listings',
-            'item' => rtrim((string)APP_URL, '/') . '/listings.php',
+            'name' => 'Betta Fish for Sale',
+            'item' => $baseUrl . '/listings.php',
         ],
         [
             '@type' => 'ListItem',
             'position' => 3,
-            'name' => $title,
+             'name' => $listingTitleSeo,
             'item' => $canonicalUrl,
         ],
     ],
@@ -838,19 +901,16 @@ $breadcrumbSchema = [
 $productSchema = [
     '@context' => 'https://schema.org',
     '@type' => 'Product',
-    'name' => $title,
+    'name' => $listingTitleSeo,
     'description' => $metaDescription,
+    'brand' => ['@type' => 'Brand', 'name' => 'Bettavaro'],
+    'category' => 'Betta Fish',	
     'url' => $canonicalUrl,
+    'image' => [$ogImage],	
 ];
 
-if ($coverImage !== '') {
-    $productSchema['image'] = [$coverImage];
-}
-if ($sku !== '') {
-    $productSchema['sku'] = $sku;
-}
-if ($species !== '') {
-    $productSchema['category'] = $species;
+if ($sku !== '' || $listingId > 0) {
+    $productSchema['sku'] = $sku !== '' ? $sku : (string) $listingId;
 }
 if ($strain !== '') {
     $productSchema['additionalProperty'][] = [
@@ -866,33 +926,37 @@ if ($grade !== '') {
         'value' => $grade,
     ];
 }
-if ($locationLabel !== '') {
-    $productSchema['areaServed'] = $locationLabel;
-}
 
-$availabilityMap = [
-    'available' => 'https://schema.org/InStock',
-    'reserved' => 'https://schema.org/LimitedAvailability',
-    'sold' => 'https://schema.org/OutOfStock',
-];
-$productSchema['offers'] = [
-    '@type' => 'Offer',
-    'priceCurrency' => strtoupper((string)($currency ?: 'USD')),
-    'url' => $canonicalUrl,
-    'availability' => $stockAvailable > 0 ? ($availabilityMap[$displayStatus] ?? 'https://schema.org/InStock') : 'https://schema.org/OutOfStock',
-    'itemCondition' => 'https://schema.org/NewCondition',
-    'inventoryLevel' => [
-        '@type' => 'QuantitativeValue',
-        'value' => $stockAvailable,
-    ],
-];
 if (is_numeric($finalPrice)) {
-    $productSchema['offers']['price'] = number_format((float)$finalPrice, 2, '.', '');
+    $productSchema['offers'] = [
+        '@type' => 'Offer',
+        'url' => $canonicalUrl,
+        'priceCurrency' => strtoupper((string) ($currency ?: 'USD')),
+        'price' => number_format((float) $finalPrice, 2, '.', ''),
+        'availability' => bv_listing_seo_availability_url($saleStatus, $status),
+        'itemCondition' => 'https://schema.org/NewCondition',
+        'seller' => [
+            '@type' => 'Organization',
+            'name' => 'Bettavaro',
+        ],
+    ];
 }
+if ((float) ($reviewSummary['avg_rating'] ?? 0) > 0 && (int) ($reviewSummary['total_reviews'] ?? 0) > 0) {
+    $productSchema['aggregateRating'] = [
+        '@type' => 'AggregateRating',
+        'ratingValue' => (float) $reviewSummary['avg_rating'],
+        'reviewCount' => (int) $reviewSummary['total_reviews'],
+    ];
+}
+$listingJsonLd = json_encode([$productSchema, $breadcrumbSchema], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 ?>
 <?php include __DIR__ . '/includes/head.php'; ?>
-<script type="application/ld+json"><?= json_encode($breadcrumbSchema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?></script>
-<script type="application/ld+json"><?= json_encode($productSchema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?></script>
+<?php include __DIR__ . '/includes/menu.php'; ?>
+<?php if (!empty($listingJsonLd)): ?>
+<script type="application/ld+json">
+<?= $listingJsonLd . "\n" ?>
+</script>
+<?php endif; ?>
 <style>
 :root{
     --bv-bg:#06110b;

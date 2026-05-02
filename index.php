@@ -59,11 +59,33 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-$pageTitle = 'Bettavaro | Premium Betta Fish from Thailand';
-$metaDescription = 'Discover premium betta fish from Thailand at Bettavaro. Explore fixed-price listings, live auctions, collector-grade quality, and a trusted reservation flow.';
-$canonicalUrl = defined('APP_URL') ? rtrim((string) APP_URL, '/') . '/' : 'https://bettavaro.com/';
-$metaRobots = 'index,follow';
-$ogImage = 'https://bettavaro.com/assets/img/og-home.jpg';
+$pageTitle = 'Betta Fish for Sale Worldwide | Premium Thai Betta Marketplace | Bettavaro';
+$metaDescription = 'Buy premium betta fish from trusted Thai breeders on Bettavaro. Explore rare Halfmoon, Koi, Giant, Fancy, wild type, auction, fixed-price, and best-offer bettas ready for collectors worldwide.';
+$canonicalUrl = defined('APP_URL') ? rtrim((string) APP_URL, '/') . '/' : 'https://www.bettavaro.com/';
+$metaRobots = 'index,follow,max-image-preview:large';
+$ogImage = 'https://www.bettavaro.com/assets/img/og-home.jpg';
+$homepageJsonLd = json_encode([
+    [
+        '@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        'name' => 'Bettavaro',
+        'url' => $canonicalUrl,
+        'description' => $metaDescription,
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => 'https://www.bettavaro.com/listings.php?q={search_term_string}',
+            'query-input' => 'required name=search_term_string',
+        ],
+    ],
+    [
+        '@context' => 'https://schema.org',
+        '@type' => 'Organization',
+        'name' => 'Bettavaro',
+        'url' => 'https://www.bettavaro.com/',
+        'logo' => 'https://www.bettavaro.com/assets/img/logo.png',
+        'sameAs' => [],
+    ],
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 $bodyClass = 'home-page';
 
 if (!function_exists('bv_e')) {
@@ -810,6 +832,15 @@ $row = bv_home_attach_seller_profile_to_listing($row, $sellerProfileMap);
 
 include __DIR__ . '/includes/head.php';
 include __DIR__ . '/includes/menu.php';
+
+if (!empty($homepageJsonLd)) {
+    echo '<script type="application/ld+json">' . "
+";
+    echo $homepageJsonLd . "
+";
+    echo '</script>' . "
+";
+}
 
 ?>
 
